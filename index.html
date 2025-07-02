@@ -17,7 +17,12 @@
       pointer-events: none;
       z-index: 10;
     }
-    .show { animation: showAnim 1s forwards; }
+    /* Animasyonlu gösterim ve son durum */
+    #congrats.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      animation: showAnim 1s forwards;
+    }
     @keyframes showAnim {
       0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
       60%  { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
@@ -28,7 +33,14 @@
 <body>
   <div id="congrats">Seni çok seviyorum 💖</div>
   <script>
-    const config = { type: Phaser.AUTO, width: 360, height: 600, backgroundColor: '#333', parent: document.body, scene: { preload, create } };
+    const config = {
+      type: Phaser.AUTO,
+      width: 360 * 3,    // x3 ölçekte genişlik
+      height: 600 * 3,   // x3 ölçekte yükseklik
+      backgroundColor: '#333',
+      parent: document.body,
+      scene: { preload, create }
+    };
     new Phaser.Game(config);function preload() {
   this.load.image('puzzle', '1000156285.jpg');
 }
@@ -62,6 +74,7 @@ function create() {
   const pieces = [];
   let placed = 0;
   const startY = frameY + frameH + 20;
+  const snapDist = pw;  // tam hücre genişliğinde
 
   for (let i = 0; i < total; i++) {
     const c = i % cols;
@@ -91,8 +104,6 @@ function create() {
     pieces.push(spr);
   }
 
-  const snapDist = Math.min(pw, ph) / 2;
-
   // Drag & drop
   this.input.on('drag', (_, gameObject, dragX, dragY) => {
     if (!gameObject.placed) {
@@ -102,17 +113,21 @@ function create() {
   });
 
   this.input.on('dragend', (_, gameObject) => {
-    if (!gameObject.placed) {
-      const dist = Phaser.Math.Distance.Between(gameObject.x, gameObject.y, gameObject.correctX, gameObject.correctY);
-      if (dist < snapDist) {
-        gameObject.x = gameObject.correctX;
-        gameObject.y = gameObject.correctY;
-        gameObject.placed = true;
-        placed++;
-        gameObject.disableInteractive();
-        if (placed === total) {
-          document.getElementById('congrats').classList.add('show');
-        }
+    // Mesafe kontrolü ve loglama
+    const dist = Phaser.Math.Distance.Between(
+      gameObject.x, gameObject.y,
+      gameObject.correctX, gameObject.correctY
+    );
+    console.log('dist:', dist, 'snapDist:', snapDist, 'placed before:', placed);
+    if (!gameObject.placed && dist < snapDist) {
+      gameObject.x = gameObject.correctX;
+      gameObject.y = gameObject.correctY;
+      gameObject.placed = true;
+      gameObject.disableInteractive();
+      placed++;
+      console.log('Placed:', placed, '/', total);
+      if (placed === total) {
+        document.getElementById('congrats').classList.add('show');
       }
     }
   });
