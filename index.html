@@ -9,24 +9,25 @@
     #congrats {
       position: absolute;
       top: 50%; left: 50%;
-      transform: translate(-50%, -50%) scale(0.5);
+      transform: translate(-50%, -50%) scale(1);
       opacity: 0;
-      font-size: 2rem;
-      color: #fff;
-      text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+      font-size: 8rem;  /* 4x büyütüldü */
+      color: #ff69b4;
+      text-shadow: 0 0 10px #fff, 0 0 20px #ff69b4;
       pointer-events: none;
       z-index: 10;
+      white-space: nowrap;
     }
     /* Animasyonlu gösterim ve son durum */
     #congrats.show {
       opacity: 1;
       transform: translate(-50%, -50%) scale(1);
-      animation: showAnim 1s forwards;
+      animation: showAnim 1.2s forwards;
     }
     @keyframes showAnim {
-      0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
-      60%  { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
-      100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5) rotate(-15deg); }
+      60%  { opacity: 1; transform: translate(-50%, -50%) scale(1.2) rotate(15deg); }
+      100% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
     }
   </style>
 </head>
@@ -35,8 +36,8 @@
   <script>
     const config = {
       type: Phaser.AUTO,
-      width: 360 * 3,    // x3 ölçekte genişlik
-      height: 600 * 3,   // x3 ölçekte yükseklik
+      width: 360 * 3,
+      height: 600 * 3,
       backgroundColor: '#333',
       parent: document.body,
       scene: { preload, create }
@@ -64,17 +65,26 @@ function create() {
     for (let c = 0; c < cols; c++) {
       const x = frameX + c * pw;
       const y = frameY + r * ph;
-      // slot outline
       graphics.lineStyle(2, 0xffa500, 0.5).strokeRect(x, y, pw, ph);
       slots.push({ x: x + pw/2, y: y + ph/2 });
     }
   }
 
+  // Confetti dokusunu oluştur
+  const confettiColors = [0xff0000, 0xffa500, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff];
+  confettiColors.forEach((col, idx) => {
+    const g = this.make.graphics({ x: 0, y: 0, add: false });
+    g.fillStyle(col, 1);
+    g.fillRect(0, 0, 8, 12);
+    g.generateTexture('confetti' + idx, 8, 12);
+    g.destroy();
+  });
+
   // Parçalar
   const pieces = [];
   let placed = 0;
   const startY = frameY + frameH + 20;
-  const snapDist = pw;  // tam hücre genişliğinde
+  const snapDist = pw;
 
   for (let i = 0; i < total; i++) {
     const c = i % cols;
@@ -82,7 +92,6 @@ function create() {
     const sx = slots[i].x;
     const sy = slots[i].y;
 
-    // Canvas ile kırpılmış parça
     const cv = document.createElement('canvas'); cv.width = pw; cv.height = ph;
     const ctx = cv.getContext('2d');
     ctx.drawImage(img,
@@ -105,29 +114,36 @@ function create() {
   }
 
   // Drag & drop
-  this.input.on('drag', (_, gameObject, dragX, dragY) => {
-    if (!gameObject.placed) {
-      gameObject.x = dragX;
-      gameObject.y = dragY;
-    }
+  this.input.on('drag', (_, go, dx, dy) => {
+    if (!go.placed) { go.x = dx; go.y = dy; }
   });
 
-  this.input.on('dragend', (_, gameObject) => {
-    // Mesafe kontrolü ve loglama
-    const dist = Phaser.Math.Distance.Between(
-      gameObject.x, gameObject.y,
-      gameObject.correctX, gameObject.correctY
-    );
+  this.input.on('dragend', (_, go) => {
+    const dist = Phaser.Math.Distance.Between(go.x, go.y, go.correctX, go.correctY);
     console.log('dist:', dist, 'snapDist:', snapDist, 'placed before:', placed);
-    if (!gameObject.placed && dist < snapDist) {
-      gameObject.x = gameObject.correctX;
-      gameObject.y = gameObject.correctY;
-      gameObject.placed = true;
-      gameObject.disableInteractive();
+    if (!go.placed && dist < snapDist) {
+      go.x = go.correctX;
+      go.y = go.correctY;
+      go.placed = true;
+      go.disableInteractive();
       placed++;
       console.log('Placed:', placed, '/', total);
       if (placed === total) {
+        // Metin animasyonu
         document.getElementById('congrats').classList.add('show');
+        // Confetti patlat
+        const particles = this.add.particles('confetti0');
+        particles.createEmitter({
+          frame: confettiColors.map((_,i) => 'confetti'+i),
+          x: { min: 0, max: config.width },
+          y: 0,
+          lifespan: 3000,
+          speedY: { min: 200, max: 400 },
+          speedX: { min: -200, max: 200 },
+          scale: { start: 1, end: 0 },
+          quantity: 200,
+          blendMode: 'ADD'
+        });
       }
     }
   });
