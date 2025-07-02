@@ -1,118 +1,135 @@
-...
-<script>
-  const config = {
-    type: Phaser.AUTO,
-    width: 360 * 3,
-    height: 600 * 3,
-    backgroundColor: '#333',
-    parent: document.body,
-    scene: { preload, create }
-  };
-  new Phaser.Game(config);
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>10 Parçalı Puzzle Oyunu</title>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; background: #444; }
+    #congrats {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(1);
+      opacity: 0;
+      font-size: 5.333rem;
+      color: #ff69b4;
+      text-shadow: 0 0 10px #fff, 0 0 20px #ff69b4;
+      pointer-events: none;
+      z-index: 10;
+      white-space: nowrap;
+    }
+    #congrats.show {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+      animation: showAnim 1.2s forwards;
+    }
+    @keyframes showAnim {
+      0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5) rotate(-15deg); }
+      60%  { opacity: 1; transform: translate(-50%, -50%) scale(1.2) rotate(15deg); }
+      100% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+    }
+  </style>
+</head>
+<body>
+  <div id="congrats">Seni çok seviyorum 💖</div>
+  <script>
+    const regionPaths = [
+      // Her parça için doğrudan çerçeveden elde ettiğiniz koordinat dizileri:
+      // Örnek: [{x:10,y:10},{x:110,y:10},...,{x:10,y:110}],
+      // Toplam 10 adet path.
+    ];
 
-  function preload() {
-    this.load.image('puzzle', '1000156285.jpg');
-  }
+    const config = {
+      type: Phaser.AUTO,
+      width: 360 * 3,
+      height: 600 * 3,
+      backgroundColor: '#333',
+      parent: document.body,
+      scene: { preload, create }
+    };
+    new Phaser.Game(config);
 
-  function create() {
-    const cols = 4, rows = 5;  // 4x5 = 20 parça
-    const total = cols * rows;
-    const img = this.textures.get('puzzle').getSourceImage();
-    const frameX = 10, frameY = 10;
-    const frameW = config.width - 20;
-    const scale = frameW / img.width;
-    const frameH = img.height * scale;
-
-    // Çerçeve ve slotlar
-    const graphics = this.add.graphics();
-    graphics.lineStyle(4, 0xffffff).strokeRect(frameX, frameY, frameW, frameH);
-
-    const pw = frameW / cols, ph = frameH / rows;
-    const slots = [];
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        const x = frameX + c * pw;
-        const y = frameY + r * ph;
-        graphics.lineStyle(2, 0xffa500, 0.5).strokeRect(x, y, pw, ph);
-        slots.push({ x: x + pw/2, y: y + ph/2 });
-      }
+    function preload() {
+      this.load.image('puzzle', '1000156285.jpg');
     }
 
-    // Confetti dokusunu oluştur
-    const confettiColors = [0xff0000, 0xffa500, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff];
-    confettiColors.forEach((col, idx) => {
-      const g = this.make.graphics({ x: 0, y: 0, add: false });
-      g.fillStyle(col, 1);
-      g.fillRect(0, 0, 8, 12);
-      g.generateTexture('confetti' + idx, 8, 12);
-      g.destroy();
-    });
+    function create() {
+      const img = this.textures.get('puzzle').getSourceImage();
+      const frameW = config.width - 20;
+      const scale = frameW / img.width;
+      const frameH = img.height * scale;
+      const slots = [];
 
-    // Parçalar
-    const pieces = [];
-    let placed = 0;
-    const startY = frameY + frameH + 20;
-    const snapDist = pw;
-
-    for (let i = 0; i < total; i++) {
-      const c = i % cols;
-      const r = Math.floor(i / cols);
-      const sx = slots[i].x;
-      const sy = slots[i].y;
-
-      const cv = document.createElement('canvas'); cv.width = pw; cv.height = ph;
-      const ctx = cv.getContext('2d');
-      ctx.drawImage(img,
-        c * (img.width/cols), r * (img.height/rows), img.width/cols, img.height/rows,
-        0, 0, pw, ph
-      );
-      this.textures.addCanvas('piece'+i, cv);
-
-      const spr = this.add.image(
-        Phaser.Math.Between(pw/2, config.width-pw/2),
-        Phaser.Math.Between(startY, config.height-ph/2),
-        'piece'+i
-      ).setInteractive().setDisplaySize(pw, ph);
-      this.input.setDraggable(spr);
-
-      spr.correctX = sx;
-      spr.correctY = sy;
-      spr.placed = false;
-      pieces.push(spr);
-    }
-
-    // Drag & drop
-    this.input.on('drag', (_, go, dx, dy) => {
-      if (!go.placed) { go.x = dx; go.y = dy; }
-    });
-
-    this.input.on('dragend', (_, go) => {
-      const dist = Phaser.Math.Distance.Between(go.x, go.y, go.correctX, go.correctY);
-      if (!go.placed && dist < snapDist) {
-        go.x = go.correctX;
-        go.y = go.correctY;
-        go.placed = true;
-        go.disableInteractive();
-        placed++;
-        if (placed === total) {
-          // Metin animasyonu
-          document.getElementById('congrats').classList.add('show');
-          // Confetti patlat
-          const particles = this.add.particles('confetti0');
-          particles.createEmitter({
-            frame: confettiColors.map((_,i) => 'confetti'+i),
-            x: { min: 0, max: config.width },
-            y: 0,
-            lifespan: 3000,
-            speedY: { min: 200, max: 400 },
-            speedX: { min: -200, max: 200 },
-            scale: { start: 1, end: 0 },
-            quantity: 200,
-            blendMode: 'ADD'
-          });
+      // 1) Ölçekli çerçeve boyutu ve slot merkezleri
+      const cols = 4, rows = 5;  // 4 sütun × 5 satır = 20 parça
+      const pw = frameW / cols, ph = frameH / rows;
+      let idx = 0;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          slots.push({ x: 10 + c * pw + pw/2, y: 10 + r * ph + ph/2 });
         }
       }
-    });
-  }
-</script>
-...
+
+      // 2) Her regionPath için mask oluştur ve parça texture'ı bake et
+      regionPaths.forEach((path, i) => {
+        // Graphics ile vektör şekli çiz
+        const shape = this.make.graphics({ x:0, y:0, add:false });
+        shape.fillStyle(0xffffff);
+        shape.beginPath();
+        path.forEach((pt, j) => {
+          if (j === 0) shape.moveTo(pt.x*scale+10, pt.y*scale+10);
+          else        shape.lineTo(pt.x*scale+10, pt.y*scale+10);
+        });
+        shape.closePath();
+        shape.fillPath();
+
+        // Mask olarak kaydet
+        const mask = shape.createGeometryMask();
+
+        // Fotoğrafı mask ile RenderTexture'a çiz
+        const rt = this.make.renderTexture({ width: pw, height: ph, add:false });
+        const imgSprite = this.add.image(0,0,'puzzle').setOrigin(0).setMask(mask);
+        rt.draw(imgSprite, -slots[i].x + pw/2, -slots[i].y + ph/2);
+        rt.saveTexture('piece'+i);
+        shape.destroy(); imgSprite.destroy();
+      });
+
+      // 3) Parçaları rastgele yerleştir
+      const snapDist = pw;
+      const particles = this.add.particles();
+      let placedCount = 0;
+
+      regionPaths.forEach((_, i) => {
+        const spr = this.add.image(
+          Phaser.Math.Between(pw/2, config.width-pw/2),
+          Phaser.Math.Between(frameH+20, config.height-ph/2),
+          'piece'+i
+        ).setInteractive().setDisplaySize(pw, ph);
+        this.input.setDraggable(spr);
+        spr.correctX = slots[i].x;
+        spr.correctY = slots[i].y;
+        spr.on('pointerup', () => {
+          const d = Phaser.Math.Distance.Between(spr.x,spr.y,spr.correctX,spr.correctY);
+          if (d < snapDist) {
+            spr.x = spr.correctX; spr.y = spr.correctY;
+            spr.disableInteractive(); placedCount++;
+            if (placedCount === regionPaths.length) {
+              document.getElementById('congrats').classList.add('show');
+              // Confetti
+              const emitter = particles.createEmitter({
+                x: { min: 0, max: config.width },
+                y: 0,
+                speed: { min:200, max:400 },
+                lifespan: 2000,
+                scale: { start:1, end:0 },
+                quantity: 100
+              });
+            }
+          }
+        });
+      });
+    }
+  </script>
+</body>
+</html>
