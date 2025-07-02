@@ -1,156 +1,118 @@
-<!DOCTYPE html>
-<html lang="tr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-  <title>10 Parçalı Puzzle Oyunu</title>
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
-  <style>
-    body { margin: 0; overflow: hidden; background: #444; }
-    #congrats {
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%) scale(1);
-      opacity: 0;
-      font-size: 5.333rem;  /* 8rem / 1.5 */
-      color: #ff69b4;
-      text-shadow: 0 0 10px #fff, 0 0 20px #ff69b4;
-      pointer-events: none;
-      z-index: 10;
-      white-space: nowrap;
-    }
-    /* Animasyonlu gösterim ve son durum */
-    #congrats.show {
-      opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
-      animation: showAnim 1.2s forwards;
-    }
-    @keyframes showAnim {
-      0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5) rotate(-15deg); }
-      60%  { opacity: 1; transform: translate(-50%, -50%) scale(1.2) rotate(15deg); }
-      100% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
-    }
-  </style>
-</head>
-<body>
-  <div id="congrats">Seni çok seviyorum 💖</div>
-  <script>
-    const config = {
-      type: Phaser.AUTO,
-      width: 360 * 3,
-      height: 600 * 3,
-      backgroundColor: '#333',
-      parent: document.body,
-      scene: { preload, create }
-    };
-    new Phaser.Game(config);
+...
+<script>
+  const config = {
+    type: Phaser.AUTO,
+    width: 360 * 3,
+    height: 600 * 3,
+    backgroundColor: '#333',
+    parent: document.body,
+    scene: { preload, create }
+  };
+  new Phaser.Game(config);
 
-    function preload() {
-      this.load.image('puzzle', '1000156285.jpg');
+  function preload() {
+    this.load.image('puzzle', '1000156285.jpg');
+  }
+
+  function create() {
+    const cols = 4, rows = 5;  // 4x5 = 20 parça
+    const total = cols * rows;
+    const img = this.textures.get('puzzle').getSourceImage();
+    const frameX = 10, frameY = 10;
+    const frameW = config.width - 20;
+    const scale = frameW / img.width;
+    const frameH = img.height * scale;
+
+    // Çerçeve ve slotlar
+    const graphics = this.add.graphics();
+    graphics.lineStyle(4, 0xffffff).strokeRect(frameX, frameY, frameW, frameH);
+
+    const pw = frameW / cols, ph = frameH / rows;
+    const slots = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = frameX + c * pw;
+        const y = frameY + r * ph;
+        graphics.lineStyle(2, 0xffa500, 0.5).strokeRect(x, y, pw, ph);
+        slots.push({ x: x + pw/2, y: y + ph/2 });
+      }
     }
 
-    function create() {
-      const cols = 5, rows = 2;
-      const total = cols * rows;
-      const img = this.textures.get('puzzle').getSourceImage();
-      const frameX = 10, frameY = 10;
-      const frameW = config.width - 20;
-      const scale = frameW / img.width;
-      const frameH = img.height * scale;
+    // Confetti dokusunu oluştur
+    const confettiColors = [0xff0000, 0xffa500, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff];
+    confettiColors.forEach((col, idx) => {
+      const g = this.make.graphics({ x: 0, y: 0, add: false });
+      g.fillStyle(col, 1);
+      g.fillRect(0, 0, 8, 12);
+      g.generateTexture('confetti' + idx, 8, 12);
+      g.destroy();
+    });
 
-      // Çerçeve ve slotlar
-      const graphics = this.add.graphics();
-      graphics.lineStyle(4, 0xffffff).strokeRect(frameX, frameY, frameW, frameH);
+    // Parçalar
+    const pieces = [];
+    let placed = 0;
+    const startY = frameY + frameH + 20;
+    const snapDist = pw;
 
-      const pw = frameW / cols, ph = frameH / rows;
-      const slots = [];
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const x = frameX + c * pw;
-          const y = frameY + r * ph;
-          graphics.lineStyle(2, 0xffa500, 0.5).strokeRect(x, y, pw, ph);
-          slots.push({ x: x + pw/2, y: y + ph/2 });
+    for (let i = 0; i < total; i++) {
+      const c = i % cols;
+      const r = Math.floor(i / cols);
+      const sx = slots[i].x;
+      const sy = slots[i].y;
+
+      const cv = document.createElement('canvas'); cv.width = pw; cv.height = ph;
+      const ctx = cv.getContext('2d');
+      ctx.drawImage(img,
+        c * (img.width/cols), r * (img.height/rows), img.width/cols, img.height/rows,
+        0, 0, pw, ph
+      );
+      this.textures.addCanvas('piece'+i, cv);
+
+      const spr = this.add.image(
+        Phaser.Math.Between(pw/2, config.width-pw/2),
+        Phaser.Math.Between(startY, config.height-ph/2),
+        'piece'+i
+      ).setInteractive().setDisplaySize(pw, ph);
+      this.input.setDraggable(spr);
+
+      spr.correctX = sx;
+      spr.correctY = sy;
+      spr.placed = false;
+      pieces.push(spr);
+    }
+
+    // Drag & drop
+    this.input.on('drag', (_, go, dx, dy) => {
+      if (!go.placed) { go.x = dx; go.y = dy; }
+    });
+
+    this.input.on('dragend', (_, go) => {
+      const dist = Phaser.Math.Distance.Between(go.x, go.y, go.correctX, go.correctY);
+      if (!go.placed && dist < snapDist) {
+        go.x = go.correctX;
+        go.y = go.correctY;
+        go.placed = true;
+        go.disableInteractive();
+        placed++;
+        if (placed === total) {
+          // Metin animasyonu
+          document.getElementById('congrats').classList.add('show');
+          // Confetti patlat
+          const particles = this.add.particles('confetti0');
+          particles.createEmitter({
+            frame: confettiColors.map((_,i) => 'confetti'+i),
+            x: { min: 0, max: config.width },
+            y: 0,
+            lifespan: 3000,
+            speedY: { min: 200, max: 400 },
+            speedX: { min: -200, max: 200 },
+            scale: { start: 1, end: 0 },
+            quantity: 200,
+            blendMode: 'ADD'
+          });
         }
       }
-
-      // Confetti dokusunu oluştur
-      const confettiColors = [0xff0000, 0xffa500, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff];
-      confettiColors.forEach((col, idx) => {
-        const g = this.make.graphics({ x: 0, y: 0, add: false });
-        g.fillStyle(col, 1);
-        g.fillRect(0, 0, 8, 12);
-        g.generateTexture('confetti' + idx, 8, 12);
-        g.destroy();
-      });
-
-      // Parçalar
-      const pieces = [];
-      let placed = 0;
-      const startY = frameY + frameH + 20;
-      const snapDist = pw;
-
-      for (let i = 0; i < total; i++) {
-        const c = i % cols;
-        const r = Math.floor(i / cols);
-        const sx = slots[i].x;
-        const sy = slots[i].y;
-
-        const cv = document.createElement('canvas'); cv.width = pw; cv.height = ph;
-        const ctx = cv.getContext('2d');
-        ctx.drawImage(img,
-          c * (img.width/cols), r * (img.height/rows), img.width/cols, img.height/rows,
-          0, 0, pw, ph
-        );
-        this.textures.addCanvas('piece'+i, cv);
-
-        const spr = this.add.image(
-          Phaser.Math.Between(pw/2, config.width-pw/2),
-          Phaser.Math.Between(startY, config.height-ph/2),
-          'piece'+i
-        ).setInteractive().setDisplaySize(pw, ph);
-        this.input.setDraggable(spr);
-
-        spr.correctX = sx;
-        spr.correctY = sy;
-        spr.placed = false;
-        pieces.push(spr);
-      }
-
-      // Drag & drop
-      this.input.on('drag', (_, go, dx, dy) => {
-        if (!go.placed) { go.x = dx; go.y = dy; }
-      });
-
-      this.input.on('dragend', (_, go) => {
-        const dist = Phaser.Math.Distance.Between(go.x, go.y, go.correctX, go.correctY);
-        console.log('dist:', dist, 'snapDist:', snapDist, 'placed before:', placed);
-        if (!go.placed && dist < snapDist) {
-          go.x = go.correctX;
-          go.y = go.correctY;
-          go.placed = true;
-          go.disableInteractive();
-          placed++;
-          console.log('Placed:', placed, '/', total);
-          if (placed === total) {
-            // Metin animasyonu
-            document.getElementById('congrats').classList.add('show');
-            // Confetti patlat
-            const particles = this.add.particles('confetti0');
-            particles.createEmitter({
-              frame: confettiColors.map((_,i) => 'confetti'+i),
-              x: { min: 0, max: config.width },
-              y: 0,
-              lifespan: 3000,
-              speedY: { min: 200, max: 400 },
-              speedX: { min: -200, max: 200 },
-              scale: { start: 1, end: 0 },
-              quantity: 200,
-              blendMode: 'ADD'
-            });
-          }
-        }
-      });
-    }
-  </script>
-</body>
-</html>
+    });
+  }
+</script>
+...
