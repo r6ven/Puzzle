@@ -1,154 +1,139 @@
-<!DOCTYPE html><html lang="tr">
+<!DOCTYPE html>
+<html lang="tr">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-  <title>10 Parçalı Puzzle Oyunu</title>
-  <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+  <meta charset="UTF-8" />
+  <title>HTML Puzzle Oyunu</title>
   <style>
-    body { margin: 0; overflow: hidden; background: #444; }
-    #congrats {
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%) scale(1);
-      opacity: 0;
-      font-size: 8rem;  /* 4x büyütüldü */
-      color: #ff69b4;
-      text-shadow: 0 0 10px #fff, 0 0 20px #ff69b4;
-      pointer-events: none;
-      z-index: 10;
-      white-space: nowrap;
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: Arial, sans-serif;
+      font-size: 0.5em; /* Yazı fontu yarı boyutuna indirildi */
+      margin: 20px;
     }
-    /* Animasyonlu gösterim ve son durum */
-    #congrats.show {
-      opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
-      animation: showAnim 1.2s forwards;
+    #puzzleCanvas {
+      margin-top: 20px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+      cursor: pointer;
     }
-    @keyframes showAnim {
-      0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5) rotate(-15deg); }
-      60%  { opacity: 1; transform: translate(-50%, -50%) scale(1.2) rotate(15deg); }
-      100% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+    #message {
+      margin-top: 15px;
+      font-size: 1.2em; /* Mesajı biraz daha büyük göstermek isterseniz burayı ayarlayabilirsiniz */
+      color: green;
     }
   </style>
 </head>
 <body>
-  <div id="congrats">Seni çok seviyorum 💖</div>
+  <h1>Sliding Puzzle Oyunu</h1>
+  <p>“puzzle.jpg” adındaki görselinizi bu klasöre koyun ve oyuna başlamak için tabloya tıklayın.</p>
+  <canvas id="puzzleCanvas"></canvas>
+  <div id="message"></div>
+
   <script>
-    const config = {
-      type: Phaser.AUTO,
-      width: 360 * 3,
-      height: 600 * 3,
-      backgroundColor: '#333',
-      parent: document.body,
-      scene: { preload, create }
+    const ROWS = 4, COLS = 4;
+    let canvas = document.getElementById('puzzleCanvas');
+    let ctx = canvas.getContext('2d');
+    let img = new Image();
+    img.src = 'puzzle.jpg';
+    let tileWidth, tileHeight;
+    let tiles = [];
+    let blankIndex;
+    let shuffled = false;
+
+    img.onload = () => {
+      tileWidth  = img.width  / COLS;
+      tileHeight = img.height / ROWS;
+      canvas.width  = img.width;
+      canvas.height = img.height;
+
+      for (let i = 0; i < ROWS*COLS; i++) {
+        let x = (i % COLS) * tileWidth;
+        let y = Math.floor(i / COLS) * tileHeight;
+        tiles.push({ sx: x, sy: y, index: i });
+      }
+      blankIndex = tiles.length - 1;
+
+      draw();
+      canvas.addEventListener('click', onClick);
     };
-    new Phaser.Game(config);function preload() {
-  this.load.image('puzzle', '1000156285.jpg');
-}
 
-function create() {
-  const cols = 5, rows = 2;
-  const total = cols * rows;
-  const img = this.textures.get('puzzle').getSourceImage();
-  const frameX = 10, frameY = 10;
-  const frameW = config.width - 20;
-  const scale = frameW / img.width;
-  const frameH = img.height * scale;
-
-  // Çerçeve ve slotlar
-  const graphics = this.add.graphics();
-  graphics.lineStyle(4, 0xffffff).strokeRect(frameX, frameY, frameW, frameH);
-
-  const pw = frameW / cols, ph = frameH / rows;
-  const slots = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const x = frameX + c * pw;
-      const y = frameY + r * ph;
-      graphics.lineStyle(2, 0xffa500, 0.5).strokeRect(x, y, pw, ph);
-      slots.push({ x: x + pw/2, y: y + ph/2 });
+    function shuffle() {
+      for (let i = 0; i < 1000; i++) {
+        let n = neighbors(blankIndex);
+        let rnd = n[Math.floor(Math.random() * n.length)];
+        swap(blankIndex, rnd);
+        blankIndex = rnd;
+      }
+      shuffled = true;
     }
-  }
 
-  // Confetti dokusunu oluştur
-  const confettiColors = [0xff0000, 0xffa500, 0xffff00, 0x00ff00, 0x00ffff, 0x0000ff, 0xff00ff];
-  confettiColors.forEach((col, idx) => {
-    const g = this.make.graphics({ x: 0, y: 0, add: false });
-    g.fillStyle(col, 1);
-    g.fillRect(0, 0, 8, 12);
-    g.generateTexture('confetti' + idx, 8, 12);
-    g.destroy();
-  });
+    function neighbors(idx) {
+      let x = idx % COLS, y = Math.floor(idx / COLS);
+      let list = [];
+      if (x > 0)          list.push(idx - 1);
+      if (x < COLS - 1)   list.push(idx + 1);
+      if (y > 0)          list.push(idx - COLS);
+      if (y < ROWS - 1)   list.push(idx + COLS);
+      return list;
+    }
 
-  // Parçalar
-  const pieces = [];
-  let placed = 0;
-  const startY = frameY + frameH + 20;
-  const snapDist = pw;
+    function swap(i, j) {
+      [tiles[i], tiles[j]] = [tiles[j], tiles[i]];
+    }
 
-  for (let i = 0; i < total; i++) {
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    const sx = slots[i].x;
-    const sy = slots[i].y;
-
-    const cv = document.createElement('canvas'); cv.width = pw; cv.height = ph;
-    const ctx = cv.getContext('2d');
-    ctx.drawImage(img,
-      c * (img.width/cols), r * (img.height/rows), img.width/cols, img.height/rows,
-      0, 0, pw, ph
-    );
-    this.textures.addCanvas('piece'+i, cv);
-
-    const spr = this.add.image(
-      Phaser.Math.Between(pw/2, config.width-pw/2),
-      Phaser.Math.Between(startY, config.height-ph/2),
-      'piece'+i
-    ).setInteractive().setDisplaySize(pw, ph);
-    this.input.setDraggable(spr);
-
-    spr.correctX = sx;
-    spr.correctY = sy;
-    spr.placed = false;
-    pieces.push(spr);
-  }
-
-  // Drag & drop
-  this.input.on('drag', (_, go, dx, dy) => {
-    if (!go.placed) { go.x = dx; go.y = dy; }
-  });
-
-  this.input.on('dragend', (_, go) => {
-    const dist = Phaser.Math.Distance.Between(go.x, go.y, go.correctX, go.correctY);
-    console.log('dist:', dist, 'snapDist:', snapDist, 'placed before:', placed);
-    if (!go.placed && dist < snapDist) {
-      go.x = go.correctX;
-      go.y = go.correctY;
-      go.placed = true;
-      go.disableInteractive();
-      placed++;
-      console.log('Placed:', placed, '/', total);
-      if (placed === total) {
-        // Metin animasyonu
-        document.getElementById('congrats').classList.add('show');
-        // Confetti patlat
-        const particles = this.add.particles('confetti0');
-        particles.createEmitter({
-          frame: confettiColors.map((_,i) => 'confetti'+i),
-          x: { min: 0, max: config.width },
-          y: 0,
-          lifespan: 3000,
-          speedY: { min: 200, max: 400 },
-          speedX: { min: -200, max: 200 },
-          scale: { start: 1, end: 0 },
-          quantity: 200,
-          blendMode: 'ADD'
-        });
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = 0; i < tiles.length; i++) {
+        if (i === blankIndex) {
+          let bx = (i % COLS) * tileWidth;
+          let by = Math.floor(i / COLS) * tileHeight;
+          ctx.fillStyle = '#ccc';
+          ctx.fillRect(bx, by, tileWidth, tileHeight);
+        } else {
+          let t = tiles[i];
+          let dx = (i % COLS) * tileWidth;
+          let dy = Math.floor(i / COLS) * tileHeight;
+          ctx.drawImage(
+            img,
+            t.sx, t.sy, tileWidth, tileHeight,
+            dx,   dy,   tileWidth, tileHeight
+          );
+        }
       }
     }
-  });
-}
 
+    function onClick(e) {
+      if (!shuffled) {
+        shuffle();
+        draw();
+        return;
+      }
+      let rect = canvas.getBoundingClientRect();
+      let mx = e.clientX - rect.left;
+      let my = e.clientY - rect.top;
+      let cx = Math.floor(mx / tileWidth);
+      let cy = Math.floor(my / tileHeight);
+      let idx = cy * COLS + cx;
+
+      if (neighbors(blankIndex).includes(idx)) {
+        swap(blankIndex, idx);
+        blankIndex = idx;
+        draw();
+
+        if (isSolved()) {
+          document.getElementById('message').textContent = '🎉 Tebrikler! Puzzle tamamlandı.';
+          canvas.removeEventListener('click', onClick);
+        }
+      }
+    }
+
+    function isSolved() {
+      for (let i = 0; i < tiles.length; i++) {
+        if (tiles[i].index !== i) return false;
+      }
+      return true;
+    }
   </script>
 </body>
 </html>
