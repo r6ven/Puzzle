@@ -1,12 +1,11 @@
-<!DOCTYPE html>
-<html lang="tr">
+<!DOCTYPE html><html lang="tr">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>50 Parçalı Puzzle Oyunu</title>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
   <style>
-    body { margin: 0; overflow: hidden; }
+    body { margin: 0; overflow: hidden; background: #444; }
     #congrats {
       position: absolute;
       top: 50%; left: 50%;
@@ -34,67 +33,96 @@
     const config = {
       type: Phaser.AUTO,
       width: 360,
-      height: 640,
+      height: 800,
       backgroundColor: '#333',
       parent: document.body,
       scene: { preload, create }
     };
-    new Phaser.Game(config);
+    new Phaser.Game(config);function preload() {
+  this.load.image('puzzle', '1000156285.jpg');
+}
 
-    function preload() {
-      // Puzzle için tam görseli yükle (aynı klasördeki dosya)
-      this.load.image('puzzle', '1000156285.jpg');
+function drawPieceShape(ctx, w, h) {
+  const bump = Math.min(w, h) / 4;
+  ctx.beginPath();
+  ctx.moveTo(bump, 0);
+  ctx.lineTo(w - bump, 0);
+  ctx.arc(w / 2, 0, bump, Math.PI, 0, true);
+  ctx.lineTo(w, bump);
+  ctx.lineTo(w, h - bump);
+  ctx.arc(w, h / 2, bump, Math.PI * 1.5, Math.PI * 0.5, true);
+  ctx.lineTo(w - bump, h);
+  ctx.lineTo(bump, h);
+  ctx.arc(w / 2, h, bump, 0, Math.PI, true);
+  ctx.lineTo(0, h - bump);
+  ctx.lineTo(0, bump);
+  ctx.arc(0, h / 2, bump, Math.PI * 0.5, Math.PI * 1.5, true);
+  ctx.closePath();
+}
+
+function create() {
+  const img = this.textures.get('puzzle').getSourceImage();
+  const frameX = 20, frameY = 20;
+  const frameW = config.width - 40;
+  const scale = frameW / img.width;
+  const frameH = img.height * scale;
+
+  // Çerçeve
+  const graphics = this.add.graphics();
+  graphics.lineStyle(4, 0xffffff);
+  graphics.strokeRect(frameX, frameY, frameW, frameH);
+
+  const cols = 10, rows = 5;
+  const pwOrig = img.width / cols, phOrig = img.height / rows;
+  const pw = frameW / cols, ph = frameH / rows;
+  const pieces = [];
+  const startY = frameY + frameH + 20;
+  const gap = 5;
+
+  let idx = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      // Canvas ile parça oluşturma
+      const cv = document.createElement('canvas');
+      cv.width = pwOrig; cv.height = phOrig;
+      const ctx = cv.getContext('2d');
+      drawPieceShape(ctx, pwOrig, phOrig);
+      ctx.clip();
+      ctx.drawImage(img,
+        c * pwOrig, r * phOrig, pwOrig, phOrig,
+        0, 0, pwOrig, phOrig
+      );
+      this.textures.addCanvas('piece' + idx, cv);
+
+      // Başlangıç konumu: hizalı grid altında
+      const arrX = frameX + (idx % cols) * (pw + gap) + pw / 2;
+      const arrY = startY + Math.floor(idx / cols) * (ph + gap) + ph / 2;
+      const spr = this.add.image(arrX, arrY, 'piece' + idx)
+                    .setInteractive()
+                    .setDisplaySize(pw, ph);
+      this.input.setDraggable(spr);
+
+      // Doğru pozisyon
+      const correctX = frameX + c * pw + pw / 2;
+      const correctY = frameY + r * ph + ph / 2;
+      pieces.push({ spr, correctX, correctY });
+      idx++;
     }
+  }
 
-    function create() {
-      const img = this.textures.get('puzzle').getSourceImage();
-      const cols = 10, rows = 5;
-      const pw = img.width / cols, ph = img.height / rows;
-      const pieces = [];
+  // Drag & drop
+  this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
+    gameObject.x = dragX;
+    gameObject.y = dragY;
+  });
+  this.input.on('dragend', () => {
+    const done = pieces.every(p => Phaser.Math.Distance.Between(
+      p.spr.x, p.spr.y, p.correctX, p.correctY
+    ) < 20);
+    if (done) document.getElementById('congrats').classList.add('show');
+  });
+}
 
-      // Parçaları dinamik olarak kırpıp dokuya ekle
-      let idx = 0;
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const cv = document.createElement('canvas');
-          cv.width = pw; cv.height = ph;
-          const ctx = cv.getContext('2d');
-          ctx.drawImage(img,
-            c * pw, r * ph, pw, ph,
-            0, 0, pw, ph
-          );
-          this.textures.addCanvas('piece' + idx, cv);
-
-          // Rastgele pozisyona yerleştir
-          const x = Phaser.Math.Between(pw/2, config.width - pw/2);
-          const y = Phaser.Math.Between(ph/2, config.height - ph/2);
-          const spr = this.add.image(x, y, 'piece' + idx).setInteractive();
-          this.input.setDraggable(spr);
-
-          pieces.push({ spr, correctX: c * pw + pw/2, correctY: r * ph + ph/2 });
-          idx++;
-        }
-      }
-
-      // Sürükle bırak işlemleri
-      this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
-        gameObject.x = dragX;
-        gameObject.y = dragY;
-      });
-      this.input.on('dragend', () => checkDone(this, pieces));
-    }
-
-    function checkDone(scene, pieces) {
-      const done = pieces.every(p => Phaser.Math.Distance.Between(
-        p.spr.x, p.spr.y,
-        p.correctX, p.correctY
-      ) < 20);
-      if (done) showCongrats();
-    }
-
-    function showCongrats() {
-      document.getElementById('congrats').classList.add('show');
-    }
   </script>
 </body>
 </html>
