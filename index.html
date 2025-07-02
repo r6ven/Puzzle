@@ -38,23 +38,28 @@
 function drawPieceShape(ctx, w, h, top, right, bottom, left) {
   const b = Math.min(w, h) / 4;
   ctx.beginPath();
+  // Üst kenar
   ctx.moveTo(left ? b : 0, 0);
-  ctx.lineTo(w / 2 - b, 0);
-  ctx.arc(w / 2, 0, b, Math.PI, 0, top);
+  ctx.lineTo(w/2 - b, 0);
+  if (top) ctx.arc(w/2, 0, b, Math.PI, 0, false);
   ctx.lineTo(w - (right ? b : 0), 0);
-  ctx.lineTo(w, h / 2 - b);
-  ctx.arc(w, h / 2, b, -Math.PI / 2, Math.PI / 2, right);
+  // Sağ kenar
+  ctx.lineTo(w, h/2 - b);
+  if (right) ctx.arc(w, h/2, b, -Math.PI/2, Math.PI/2, false);
   ctx.lineTo(w, h - (bottom ? b : 0));
-  ctx.lineTo(w / 2 + b, h);
-  ctx.arc(w / 2, h, b, 0, Math.PI, bottom);
+  // Alt kenar
+  ctx.lineTo(w/2 + b, h);
+  if (bottom) ctx.arc(w/2, h, b, 0, Math.PI, false);
   ctx.lineTo(left ? b : 0, h);
-  ctx.lineTo(0, h / 2 + b);
-  ctx.arc(0, h / 2, b, Math.PI / 2, -Math.PI / 2, left);
+  // Sol kenar
+  ctx.lineTo(0, h/2 + b);
+  if (left) ctx.arc(0, h/2, b, Math.PI/2, -Math.PI/2, false);
   ctx.lineTo(0, top ? b : 0);
   ctx.closePath();
 }
 
 function create() {
+  const cols = 10, rows = 5;
   const img = this.textures.get('puzzle').getSourceImage();
   const frameX = 10, frameY = 10;
   const frameW = config.width - 20;
@@ -62,74 +67,79 @@ function create() {
   const frameH = img.height * scale;
 
   // Çerçeve
-  const graphics = this.add.graphics();
-  graphics.lineStyle(4, 0xffffff);
-  graphics.strokeRect(frameX, frameY, frameW, frameH);
+  this.add.graphics().lineStyle(4, 0xffffff).strokeRect(frameX, frameY, frameW, frameH);
 
-  const cols = 10, rows = 5;
-  const pwOrig = img.width / cols, phOrig = img.height / rows;
-  const pw = frameW / cols, ph = frameH / rows;
-  const pieces = [];
-  const startY = frameY + frameH + 20;
+  // Kenar dizileri
+  const topE = Array.from({length: rows}, () => Array(cols).fill(false));
+  const bottomE = Array.from({length: rows}, () => Array(cols).fill(false));
+  const leftE = Array.from({length: rows}, () => Array(cols).fill(false));
+  const rightE = Array.from({length: rows}, () => Array(cols).fill(false));
 
+  // Yatay kenarlar (üst-alt)
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      // Parça bağlantı durumları
-      const top = r > 0 ? !( (r - 1) % 2 === 0 ) : false;
-      const bottom = r % 2 === 0;
-      const left = c > 0 ? !( (c - 1) % 2 === 0 ) : false;
-      const right = c % 2 === 0;
-
-      // Puzzle parçası
-      const idx = r * cols + c;
-      const cv = document.createElement('canvas');
-      cv.width = pw;
-      cv.height = ph;
-      const ctx = cv.getContext('2d');
-      drawPieceShape(ctx, pw, ph, top, right, bottom, left);
-      ctx.clip('evenodd');
-      ctx.drawImage(img,
-        c * pwOrig, r * phOrig, pwOrig, phOrig,
-        0, 0, pw, ph
-      );
-      this.textures.addCanvas('piece' + idx, cv);
-
-      // Parça izi (outline)
-      const cv2 = document.createElement('canvas');
-      cv2.width = pw;
-      cv2.height = ph;
-      const ctx2 = cv2.getContext('2d');
-      drawPieceShape(ctx2, pw, ph, top, right, bottom, left);
-      ctx2.lineWidth = 2;
-      ctx2.strokeStyle = 'rgba(255,255,255,0.3)';
-      ctx2.stroke();
-      this.textures.addCanvas('outline' + idx, cv2);
-
-      const correctX = frameX + c * pw + pw / 2;
-      const correctY = frameY + r * ph + ph / 2;
-      this.add.image(correctX, correctY, 'outline' + idx).setDisplaySize(pw, ph);
-
-      // Karışık başlangıç pozisyonu
-      const rndX = Phaser.Math.Between(pw / 2, config.width - pw / 2);
-      const rndY = Phaser.Math.Between(startY, config.height - ph / 2);
-      const spr = this.add.image(rndX, rndY, 'piece' + idx)
-                    .setInteractive()
-                    .setDisplaySize(pw, ph);
-      this.input.setDraggable(spr);
-      pieces.push({ spr, correctX, correctY });
+      topE[r][c] = r === 0 ? false : !bottomE[r-1][c];
+      bottomE[r][c] = r === rows-1 ? false : !topE[r][c];
+    }
+  }
+  // Dikey kenarlar (sol-sağ)
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      leftE[r][c] = c === 0 ? false : !rightE[r][c-1];
+      rightE[r][c] = c === cols-1 ? false : !leftE[r][c];
     }
   }
 
-  // Drag & drop ve tamamlama kontrolü
-  this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
-    gameObject.x = dragX;
-    gameObject.y = dragY;
-  });
-  this.input.on('dragend', () => {
-    const done = pieces.every(p => Phaser.Math.Distance.Between(
-      p.spr.x, p.spr.y, p.correctX, p.correctY
-    ) < 20);
-    if (done) document.getElementById('congrats').classList.add('show');
+  const pieces = [];
+  const pw = frameW / cols, ph = frameH / rows;
+  const startY = frameY + frameH + 20;
+
+  // Parçaları oluştur
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const idx = r * cols + c;
+      // Canvas parça
+      const cv = document.createElement('canvas'); cv.width = pw; cv.height = ph;
+      const ctx = cv.getContext('2d');
+      drawPieceShape(ctx, pw, ph, topE[r][c], rightE[r][c], bottomE[r][c], leftE[r][c]);
+      ctx.clip('evenodd');
+      ctx.drawImage(img,
+        c * (img.width/cols), r * (img.height/rows), img.width/cols, img.height/rows,
+        0, 0, pw, ph
+      );
+      this.textures.addCanvas('piece'+idx, cv);
+
+      // Parça izi
+      const outline = document.createElement('canvas'); outline.width = pw; outline.height = ph;
+      const octx = outline.getContext('2d');
+      drawPieceShape(octx, pw, ph, topE[r][c], rightE[r][c], bottomE[r][c], leftE[r][c]);
+      octx.lineWidth = 2; octx.strokeStyle='rgba(255,255,255,0.3)'; octx.stroke();
+      this.textures.addCanvas('outline'+idx, outline);
+
+      // Outline çerçeve içine
+      this.add.image(
+        frameX + c*pw + pw/2,
+        frameY + r*ph + ph/2,
+        'outline'+idx
+      ).setDisplaySize(pw, ph);
+
+      // Rastgele karışık başlangıç
+      const spr = this.add.image(
+        Phaser.Math.Between(pw/2, config.width-pw/2),
+        Phaser.Math.Between(startY, config.height-ph/2),
+        'piece'+idx
+      ).setInteractive().setDisplaySize(pw, ph);
+      this.input.setDraggable(spr);
+      pieces.push({spr, x: frameX+c*pw+pw/2, y: frameY+r*ph+ph/2});
+    }
+  }
+
+  // Sürükle bırak ve kontrol
+  this.input.on('drag', (_,gameObject,dx,dy)=>{ gameObject.x=dx; gameObject.y=dy; });
+  this.input.on('dragend', ()=>{
+    if(pieces.every(p=> Phaser.Math.Distance.Between(p.spr.x,p.spr.y,p.x,p.y)<20)){
+      document.getElementById('congrats').classList.add('show');
+    }
   });
 }
 
