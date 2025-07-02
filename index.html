@@ -3,16 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
-  <title>10 Parçalı Puzzle Oyunu</title>
+  <title>20 Parçalı Puzzle Oyunu</title>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; background: #444; }
     #congrats {
       position: absolute;
       top: 50%; left: 50%;
-      transform: translate(-50%, -50%) scale(1);
+      transform: translate(-50%, -50%);
       opacity: 0;
-      font-size: 5.333rem;
+      font-size: 4rem;
       color: #ff69b4;
       text-shadow: 0 0 10px #fff, 0 0 20px #ff69b4;
       pointer-events: none;
@@ -21,113 +21,147 @@
     }
     #congrats.show {
       opacity: 1;
-      transform: translate(-50%, -50%) scale(1);
       animation: showAnim 1.2s forwards;
     }
     @keyframes showAnim {
-      0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.5) rotate(-15deg); }
-      60%  { opacity: 1; transform: translate(-50%, -50%) scale(1.2) rotate(15deg); }
-      100% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+      0%   { transform: translate(-50%, -50%) scale(0.5) rotate(-15deg); opacity: 0; }
+      60%  { transform: translate(-50%, -50%) scale(1.2) rotate(15deg); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 1; }
     }
   </style>
 </head>
 <body>
   <div id="congrats">Seni çok seviyorum 💖</div>
   <script>
-    const regionPaths = [
-      // Her parça için doğrudan çerçeveden elde ettiğiniz koordinat dizileri:
-      // Örnek: [{x:10,y:10},{x:110,y:10},...,{x:10,y:110}],
-      // Toplam 10 adet path.
-    ];
-
     const config = {
       type: Phaser.AUTO,
       width: 360 * 3,
       height: 600 * 3,
       backgroundColor: '#333',
       parent: document.body,
-      scene: { preload, create }
+      scene: { preload: preload, create: create }
     };
     new Phaser.Game(config);
 
     function preload() {
-      this.load.image('puzzle', '1000156285.jpg');
+      this.load.image('puzzle', './1000156285.jpg');
     }
 
     function create() {
+      console.log('Phaser create() başladı');
+      const cols = 4, rows = 5;
+      const total = cols * rows;
       const img = this.textures.get('puzzle').getSourceImage();
-      const frameW = config.width - 20;
+      if (!img) {
+        console.error('Puzzle görseli yüklenmedi!');
+      } else {
+        console.log('Görsel boyutları:', img.width, img.height);
+      }
+
+      const frameX = 10, frameY = 10;
+      const frameW = config.width - frameX * 2;
       const scale = frameW / img.width;
       const frameH = img.height * scale;
-      const slots = [];
 
-      // 1) Ölçekli çerçeve boyutu ve slot merkezleri
-      const cols = 4, rows = 5;  // 4 sütun × 5 satır = 20 parça
+      // Hata kontrol: full resmi göster
+      this.add.image(frameX, frameY, 'puzzle')
+        .setOrigin(0)
+        .setDisplaySize(frameW, frameH)
+        .setAlpha(0.2);
+
+      // Çerçeve ve slotlar
+      const graphics = this.add.graphics();
+      graphics.lineStyle(4, 0xffffff).strokeRect(frameX, frameY, frameW, frameH);
       const pw = frameW / cols, ph = frameH / rows;
-      let idx = 0;
+
+      const slots = [];
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          slots.push({ x: 10 + c * pw + pw/2, y: 10 + r * ph + ph/2 });
+          const x = frameX + c * pw;
+          const y = frameY + r * ph;
+          graphics.lineStyle(2, 0xffa500, 0.5).strokeRect(x, y, pw, ph);
+          slots.push({ x: x + pw / 2, y: y + ph / 2 });
         }
       }
 
-      // 2) Her regionPath için mask oluştur ve parça texture'ı bake et
-      regionPaths.forEach((path, i) => {
-        // Graphics ile vektör şekli çiz
-        const shape = this.make.graphics({ x:0, y:0, add:false });
-        shape.fillStyle(0xffffff);
-        shape.beginPath();
-        path.forEach((pt, j) => {
-          if (j === 0) shape.moveTo(pt.x*scale+10, pt.y*scale+10);
-          else        shape.lineTo(pt.x*scale+10, pt.y*scale+10);
-        });
-        shape.closePath();
-        shape.fillPath();
-
-        // Mask olarak kaydet
-        const mask = shape.createGeometryMask();
-
-        // Fotoğrafı mask ile RenderTexture'a çiz
-        const rt = this.make.renderTexture({ width: pw, height: ph, add:false });
-        const imgSprite = this.add.image(0,0,'puzzle').setOrigin(0).setMask(mask);
-        rt.draw(imgSprite, -slots[i].x + pw/2, -slots[i].y + ph/2);
-        rt.saveTexture('piece'+i);
-        shape.destroy(); imgSprite.destroy();
+      // Konfeti dokuları
+      const confettiColors = [0xff0000,0xffa500,0xffff00,0x00ff00,0x00ffff,0x0000ff,0xff00ff];
+      confettiColors.forEach((col, idx) => {
+        const g = this.make.graphics({ add: false });
+        g.fillStyle(col, 1);
+        g.fillRect(0, 0, 6, 10);
+        g.generateTexture('confetti' + idx, 6, 10);
+        g.destroy();
       });
 
-      // 3) Parçaları rastgele yerleştir
-      const snapDist = pw;
-      const particles = this.add.particles();
-      let placedCount = 0;
+      const pieces = [];
+      let placed = 0;
+      const snapDist = Math.min(pw, ph) * 0.6;
+      const startY = frameY + frameH + 20;
 
-      regionPaths.forEach((_, i) => {
-        const spr = this.add.image(
-          Phaser.Math.Between(pw/2, config.width-pw/2),
-          Phaser.Math.Between(frameH+20, config.height-ph/2),
-          'piece'+i
+      // Parçaları oluştur
+      for (let i = 0; i < total; i++) {
+        const c = i % cols;
+        const r = Math.floor(i / cols);
+        const canvas = document.createElement('canvas');
+        canvas.width = pw;
+        canvas.height = ph;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(
+          img,
+          c * (img.width / cols), r * (img.height / rows),
+          img.width / cols, img.height / rows,
+          0, 0, pw, ph
+        );
+        this.textures.addCanvas('piece' + i, canvas);
+
+        const sprite = this.add.image(
+          Phaser.Math.Between(pw / 2, config.width - pw / 2),
+          Phaser.Math.Between(startY, config.height - ph / 2),
+          'piece' + i
         ).setInteractive().setDisplaySize(pw, ph);
-        this.input.setDraggable(spr);
-        spr.correctX = slots[i].x;
-        spr.correctY = slots[i].y;
-        spr.on('pointerup', () => {
-          const d = Phaser.Math.Distance.Between(spr.x,spr.y,spr.correctX,spr.correctY);
-          if (d < snapDist) {
-            spr.x = spr.correctX; spr.y = spr.correctY;
-            spr.disableInteractive(); placedCount++;
-            if (placedCount === regionPaths.length) {
+        this.input.setDraggable(sprite);
+        sprite.correctX = slots[i].x;
+        sprite.correctY = slots[i].y;
+        sprite.placed = false;
+        pieces.push(sprite);
+      }
+
+      const particles = this.add.particles();
+
+      // Drag davranışı
+      this.input.on('drag', (pointer, obj, dragX, dragY) => {
+        if (!obj.placed) {
+          obj.x = dragX;
+          obj.y = dragY;
+        }
+      });
+      this.input.on('dragend', (pointer, obj) => {
+        if (!obj.placed) {
+          const dist = Phaser.Math.Distance.Between(obj.x, obj.y, obj.correctX, obj.correctY);
+          console.log('dist:', dist.toFixed(2), 'snapDist:', snapDist.toFixed(2));
+          if (dist < snapDist) {
+            obj.x = obj.correctX;
+            obj.y = obj.correctY;
+            obj.disableInteractive();
+            obj.placed = true;
+            placed++;
+            console.log('Yerleşen:', placed, '/', total);
+            if (placed === total) {
               document.getElementById('congrats').classList.add('show');
-              // Confetti
               const emitter = particles.createEmitter({
+                frame: confettiColors.map((_,i) => 'confetti'+i),
                 x: { min: 0, max: config.width },
                 y: 0,
-                speed: { min:200, max:400 },
+                speedY: { min: 200, max: 400 },
+                speedX: { min: -200, max: 200 },
                 lifespan: 2000,
-                scale: { start:1, end:0 },
-                quantity: 100
+                scale: { start: 1, end: 0 },
+                quantity: 150
               });
             }
           }
-        });
+        }
       });
     }
   </script>
