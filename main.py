@@ -42,8 +42,8 @@
     new Phaser.Game(config);
 
     function preload() {
-      // Tek bir büyük puzzle görseli yükleyin (örn: assets/puzzle.jpg)
-      this.load.image('puzzle', 'assets/puzzle.jpg');
+      // Puzzle için tam görseli yükle (aynı klasördeki dosya)
+      this.load.image('puzzle', '1000156285.jpg');
     }
 
     function create() {
@@ -52,11 +52,10 @@
       const pw = img.width / cols, ph = img.height / rows;
       const pieces = [];
 
-      // Parçaları dinamik olarak kırpıp dokuya ekleme
+      // Parçaları dinamik olarak kırpıp dokuya ekle
       let idx = 0;
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          // Canvas oluştur
           const cv = document.createElement('canvas');
           cv.width = pw; cv.height = ph;
           const ctx = cv.getContext('2d');
@@ -64,7 +63,6 @@
             c * pw, r * ph, pw, ph,
             0, 0, pw, ph
           );
-          // Phaser texture olarak ekle
           this.textures.addCanvas('piece' + idx, cv);
 
           // Rastgele pozisyona yerleştir
