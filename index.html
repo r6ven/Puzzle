@@ -30,40 +30,34 @@
 <body>
   <div id="congrats">Seni çok seviyorum 💖</div>
   <script>
-    const config = {
-      type: Phaser.AUTO,
-      width: 360,
-      height: 800,
-      backgroundColor: '#333',
-      parent: document.body,
-      scene: { preload, create }
-    };
+    const config = { type: Phaser.AUTO, width: 360, height: 900, backgroundColor: '#333', parent: document.body, scene: { preload, create } };
     new Phaser.Game(config);function preload() {
   this.load.image('puzzle', '1000156285.jpg');
 }
 
-function drawPieceShape(ctx, w, h) {
-  const bump = Math.min(w, h) / 4;
+function drawPieceShape(ctx, w, h, top, right, bottom, left) {
+  const b = Math.min(w, h) / 4;
   ctx.beginPath();
-  ctx.moveTo(bump, 0);
-  ctx.lineTo(w - bump, 0);
-  ctx.arc(w / 2, 0, bump, Math.PI, 0, true);
-  ctx.lineTo(w, bump);
-  ctx.lineTo(w, h - bump);
-  ctx.arc(w, h / 2, bump, Math.PI * 1.5, Math.PI * 0.5, true);
-  ctx.lineTo(w - bump, h);
-  ctx.lineTo(bump, h);
-  ctx.arc(w / 2, h, bump, 0, Math.PI, true);
-  ctx.lineTo(0, h - bump);
-  ctx.lineTo(0, bump);
-  ctx.arc(0, h / 2, bump, Math.PI * 0.5, Math.PI * 1.5, true);
+  ctx.moveTo(left ? b : 0, 0);
+  ctx.lineTo(w / 2 - b, 0);
+  ctx.arc(w / 2, 0, b, Math.PI, 0, top);
+  ctx.lineTo(w - (right ? b : 0), 0);
+  ctx.lineTo(w, h / 2 - b);
+  ctx.arc(w, h / 2, b, -Math.PI / 2, Math.PI / 2, right);
+  ctx.lineTo(w, h - (bottom ? b : 0));
+  ctx.lineTo(w / 2 + b, h);
+  ctx.arc(w / 2, h, b, 0, Math.PI, bottom);
+  ctx.lineTo(left ? b : 0, h);
+  ctx.lineTo(0, h / 2 + b);
+  ctx.arc(0, h / 2, b, Math.PI / 2, -Math.PI / 2, left);
+  ctx.lineTo(0, top ? b : 0);
   ctx.closePath();
 }
 
 function create() {
   const img = this.textures.get('puzzle').getSourceImage();
-  const frameX = 20, frameY = 20;
-  const frameW = config.width - 40;
+  const frameX = 10, frameY = 10;
+  const frameW = config.width - 20;
   const scale = frameW / img.width;
   const frameH = img.height * scale;
 
@@ -77,37 +71,52 @@ function create() {
   const pw = frameW / cols, ph = frameH / rows;
   const pieces = [];
   const startY = frameY + frameH + 20;
-  const gap = 5;
 
-  let idx = 0;
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      // Canvas ile parça oluşturma (hedef boyutta)
+      // Parça bağlantı durumları
+      const top = r > 0 ? !( (r - 1) % 2 === 0 ) : false;
+      const bottom = r % 2 === 0;
+      const left = c > 0 ? !( (c - 1) % 2 === 0 ) : false;
+      const right = c % 2 === 0;
+
+      // Puzzle parçası
+      const idx = r * cols + c;
       const cv = document.createElement('canvas');
       cv.width = pw;
       cv.height = ph;
       const ctx = cv.getContext('2d');
-      drawPieceShape(ctx, pw, ph);
+      drawPieceShape(ctx, pw, ph, top, right, bottom, left);
       ctx.clip('evenodd');
-      // Orijinal görselden parça al, hedef boyuta çiz
       ctx.drawImage(img,
         c * pwOrig, r * phOrig, pwOrig, phOrig,
         0, 0, pw, ph
       );
       this.textures.addCanvas('piece' + idx, cv);
 
-      // Başlangıç konumu: hizalı grid altında
-      const arrX = frameX + (idx % cols) * (pw + gap) + pw / 2;
-      const arrY = startY + Math.floor(idx / cols) * (ph + gap) + ph / 2;
-      const spr = this.add.image(arrX, arrY, 'piece' + idx)
-                    .setInteractive();
-      this.input.setDraggable(spr);
+      // Parça izi (outline)
+      const cv2 = document.createElement('canvas');
+      cv2.width = pw;
+      cv2.height = ph;
+      const ctx2 = cv2.getContext('2d');
+      drawPieceShape(ctx2, pw, ph, top, right, bottom, left);
+      ctx2.lineWidth = 2;
+      ctx2.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx2.stroke();
+      this.textures.addCanvas('outline' + idx, cv2);
 
-      // Doğru pozisyon
       const correctX = frameX + c * pw + pw / 2;
       const correctY = frameY + r * ph + ph / 2;
+      this.add.image(correctX, correctY, 'outline' + idx).setDisplaySize(pw, ph);
+
+      // Karışık başlangıç pozisyonu
+      const rndX = Phaser.Math.Between(pw / 2, config.width - pw / 2);
+      const rndY = Phaser.Math.Between(startY, config.height - ph / 2);
+      const spr = this.add.image(rndX, rndY, 'piece' + idx)
+                    .setInteractive()
+                    .setDisplaySize(pw, ph);
+      this.input.setDraggable(spr);
       pieces.push({ spr, correctX, correctY });
-      idx++;
     }
   }
 
