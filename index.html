@@ -82,15 +82,17 @@ function create() {
   let idx = 0;
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      // Canvas ile parça oluşturma
+      // Canvas ile parça oluşturma (hedef boyutta)
       const cv = document.createElement('canvas');
-      cv.width = pwOrig; cv.height = phOrig;
+      cv.width = pw;
+      cv.height = ph;
       const ctx = cv.getContext('2d');
-      drawPieceShape(ctx, pwOrig, phOrig);
-      ctx.clip();
+      drawPieceShape(ctx, pw, ph);
+      ctx.clip('evenodd');
+      // Orijinal görselden parça al, hedef boyuta çiz
       ctx.drawImage(img,
         c * pwOrig, r * phOrig, pwOrig, phOrig,
-        0, 0, pwOrig, phOrig
+        0, 0, pw, ph
       );
       this.textures.addCanvas('piece' + idx, cv);
 
@@ -98,8 +100,7 @@ function create() {
       const arrX = frameX + (idx % cols) * (pw + gap) + pw / 2;
       const arrY = startY + Math.floor(idx / cols) * (ph + gap) + ph / 2;
       const spr = this.add.image(arrX, arrY, 'piece' + idx)
-                    .setInteractive()
-                    .setDisplaySize(pw, ph);
+                    .setInteractive();
       this.input.setDraggable(spr);
 
       // Doğru pozisyon
@@ -110,7 +111,7 @@ function create() {
     }
   }
 
-  // Drag & drop
+  // Drag & drop ve tamamlama kontrolü
   this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
     gameObject.x = dragX;
     gameObject.y = dragY;
